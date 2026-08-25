@@ -98,7 +98,7 @@ C:\Users\Administrator\Desktop\XrayR v0.9.4
 保留 `xrayr open-ports` 功能。该操作会显著降低服务器防火墙保护级别，因此脚本会：
 
 - 显示高风险警告；
-- 要求输入明确确认词 `OPEN_ALL_PORTS`，再进行一次最终确认；
+- 要求输入 `y` 明确确认；
 - 尽量备份现有 iptables/ip6tables/nftables 规则；
 - 仅在用户主动执行时运行；
 - 输出 iptables、ip6tables、nftables 的恢复命令，并提供 `xrayr restore-firewall` 尝试恢复最近的 IPv4 iptables 备份。

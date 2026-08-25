@@ -160,14 +160,8 @@ open_all_ports() {
     echo
     echo "脚本会先尽量把当前防火墙规则备份到 /root。"
     echo
-    read -r -p "如确认继续，请输入 OPEN_ALL_PORTS：" confirm
-    if [[ "${confirm}" != "OPEN_ALL_PORTS" ]]; then
-        warn "已取消。"
-        return 0
-    fi
-
-    read -r -p "最后确认：确定立即清空防火墙规则吗？请输入 y：[y/N] " second_confirm
-    if [[ "${second_confirm}" != "y" && "${second_confirm}" != "Y" ]]; then
+    read -r -p "确认放行所有网络端口？请输入 y：[y/N] " confirm
+    if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
         warn "已取消，防火墙没有变更。"
         return 0
     fi
