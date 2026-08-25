@@ -1,0 +1,36 @@
+name: Validate Scripts
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "install.sh"
+      - "scripts/**"
+      - "systemd/**"
+      - ".github/workflows/validate.yml"
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bash syntax check
+        run: |
+          bash -n install.sh
+          bash -n scripts/xrayr
+
+      - name: Check required repository references
+        run: |
+          grep -q 'nbbk/XrayR-KOJO' install.sh
+          grep -q 'nbbk/XrayR-KOJO' scripts/xrayr
+          ! grep -R -nE 'XrayR-project/XrayR/releases|youzi3/XrayR/releases' install.sh scripts systemd
+
+      - name: Check systemd paths
+        run: |
+          grep -q '/usr/local/XrayR/XrayR' systemd/XrayR.service
+          grep -q '/etc/XrayR/config.yml' systemd/XrayR.service
