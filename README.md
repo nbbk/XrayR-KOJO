@@ -106,6 +106,16 @@ CertConfig:
 
 申请失败时不要连续重启，否则可能触发 Let’s Encrypt 授权失败限制。先执行 `systemctl stop XrayR`，修复域名或端口后再重试。
 
+## 完整配置示例
+
+仓库提供三份脱敏的完整单节点配置：
+
+- [HTTP 自动证书配置](config/examples/config-http.yml)
+- [Cloudflare DNS 自动证书配置](config/examples/config-dns-cloudflare.yml)
+- [REALITY 配置](config/examples/config-reality.yml)
+
+字段替换方法和安全说明见 [docs/CONFIG.md](docs/CONFIG.md)。不要把真实面板密钥、DNS Token 或 REALITY 私钥提交到 GitHub。
+
 ## 支持架构
 
 安装器会把系统架构映射到对应 Release ZIP：
