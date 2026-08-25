@@ -20,7 +20,14 @@ Release title 建议：
 XrayR-KOJO v0.9.4
 ```
 
-将本地保存的原版 v0.9.4 ZIP 上传为 Release assets。至少建议上传：
+建议同时上传源码归档，便于长期备份并满足开源许可证的源码可获得性要求：
+
+```text
+XrayR-0.9.4.tar.gz
+XrayR-0.9.4.zip
+```
+
+至少上传最常用 Linux 二进制：
 
 ```text
 XrayR-linux-64.zip
@@ -51,6 +58,8 @@ XrayR-linux-s390x.zip
 ```text
 C:\Users\Administrator\Desktop\XrayR v0.9.4
 ```
+
+该目录中的 Windows、macOS、FreeBSD 等包也可以一起上传保存，但 Linux 一键安装脚本只会自动选择 `XrayR-linux-*.zip`。
 
 ## 发布后验证
 
