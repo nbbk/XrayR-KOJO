@@ -1,0 +1,340 @@
+#!/usr/bin/env bash
+set -u
+
+REPO="nbbk/XrayR-KOJO"
+RAW_INSTALL="https://raw.githubusercontent.com/${REPO}/main/install.sh"
+RAW_MANAGER="https://raw.githubusercontent.com/${REPO}/main/scripts/xrayr"
+INSTALL_DIR="/usr/local/XrayR"
+CONFIG_DIR="/etc/XrayR"
+BACKUP_DIR="${CONFIG_DIR}/backups"
+SERVICE="XrayR"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PLAIN='\033[0m'
+
+info() { echo -e "${BLUE}[INFO]${PLAIN} $*"; }
+ok()   { echo -e "${GREEN}[OK]${PLAIN} $*"; }
+warn() { echo -e "${YELLOW}[WARN]${PLAIN} $*"; }
+err()  { echo -e "${RED}[ERROR]${PLAIN} $*" >&2; }
+
+need_root() {
+    if [[ ${EUID} -ne 0 ]]; then
+        err "请使用 root 权限运行。"
+        exit 1
+    fi
+}
+
+installed() {
+    [[ -x "${INSTALL_DIR}/XrayR" && -f /etc/systemd/system/XrayR.service ]]
+}
+
+start_xrayr() {
+    systemctl start "${SERVICE}"
+    sleep 1
+    systemctl is-active --quiet "${SERVICE}" && ok "XrayR 已启动。" || { err "启动失败，请执行 xrayr log。"; return 1; }
+}
+
+stop_xrayr() {
+    systemctl stop "${SERVICE}"
+    ok "XrayR 已停止。"
+}
+
+restart_xrayr() {
+    systemctl restart "${SERVICE}"
+    sleep 2
+    systemctl is-active --quiet "${SERVICE}" && ok "XrayR 已重启。" || { err "重启失败，请执行 xrayr log。"; return 1; }
+}
+
+status_xrayr() {
+    systemctl status "${SERVICE}" --no-pager -l
+}
+
+log_xrayr() {
+    journalctl -u "${SERVICE}.service" -e -f --no-pager
+}
+
+enable_xrayr() {
+    systemctl enable "${SERVICE}"
+    ok "已设置开机自启。"
+}
+
+disable_xrayr() {
+    systemctl disable "${SERVICE}"
+    ok "已取消开机自启。"
+}
+
+edit_config() {
+    mkdir -p "${CONFIG_DIR}"
+    local editor="${EDITOR:-}"
+    if [[ -z "${editor}" ]]; then
+        if command -v nano >/dev/null 2>&1; then editor="nano"; else editor="vi"; fi
+    fi
+    "${editor}" "${CONFIG_DIR}/config.yml"
+}
+
+show_version() {
+    if [[ -f "${INSTALL_DIR}/.kojo-version" ]]; then
+        echo "KOJO Release: $(cat "${INSTALL_DIR}/.kojo-version")"
+    fi
+    if [[ -x "${INSTALL_DIR}/XrayR" ]]; then
+        "${INSTALL_DIR}/XrayR" -version 2>/dev/null || true
+    else
+        echo "XrayR 未安装。"
+    fi
+}
+
+backup_config() {
+    mkdir -p "${BACKUP_DIR}"
+    local ts file
+    ts="$(date +%Y%m%d-%H%M%S)"
+    file="${BACKUP_DIR}/xrayr-config-${ts}.tar.gz"
+
+    tar --exclude='./backups' -C "${CONFIG_DIR}" -czf "${file}" .
+    ok "配置已备份：${file}"
+}
+
+restore_config() {
+    mkdir -p "${BACKUP_DIR}"
+    local file="${1:-}"
+
+    if [[ -z "${file}" ]]; then
+        file="$(find "${BACKUP_DIR}" -maxdepth 1 -type f -name 'xrayr-config-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-)"
+    fi
+
+    if [[ -z "${file}" || ! -f "${file}" ]]; then
+        err "没有找到可恢复的配置备份。"
+        return 1
+    fi
+
+    backup_config >/dev/null 2>&1 || true
+    systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
+    tar -C "${CONFIG_DIR}" -xzf "${file}"
+    ok "已恢复：${file}"
+    restart_xrayr
+}
+
+update_xrayr() {
+    local version="${1:-}"
+    if [[ -n "${version}" ]]; then
+        bash <(curl -fsSL "${RAW_INSTALL}") "${version}"
+    else
+        bash <(curl -fsSL "${RAW_INSTALL}")
+    fi
+}
+
+update_manager() {
+    local tmp
+    tmp="$(mktemp)"
+    if curl -fsSL "${RAW_MANAGER}" -o "${tmp}"; then
+        install -m 755 "${tmp}" /usr/bin/XrayR
+        rm -f /usr/bin/xrayr
+        ln -s /usr/bin/XrayR /usr/bin/xrayr
+        rm -f "${tmp}"
+        ok "管理脚本已更新。"
+    else
+        rm -f "${tmp}"
+        err "管理脚本更新失败。"
+        return 1
+    fi
+}
+
+open_all_ports() {
+    echo -e "${RED}============================================================${PLAIN}"
+    echo -e "${RED}                 高风险操作：放行所有端口${PLAIN}"
+    echo -e "${RED}============================================================${PLAIN}"
+    echo "该操作会尝试关闭 UFW/firewalld，并清空 iptables/ip6tables/nftables 过滤规则。"
+    echo "这会显著降低 VPS 的网络访问控制。仅在你明确知道风险时执行。"
+    echo
+    echo "脚本会先尽量把当前防火墙规则备份到 /root。"
+    echo
+    read -r -p "如确认继续，请输入 OPEN_ALL_PORTS：" confirm
+    if [[ "${confirm}" != "OPEN_ALL_PORTS" ]]; then
+        warn "已取消。"
+        return 0
+    fi
+
+    local ts backup_prefix
+    ts="$(date +%Y%m%d-%H%M%S)"
+    backup_prefix="/root/xrayr-firewall-${ts}"
+
+    command -v iptables-save >/dev/null 2>&1 && iptables-save > "${backup_prefix}.iptables.rules" 2>/dev/null || true
+    command -v ip6tables-save >/dev/null 2>&1 && ip6tables-save > "${backup_prefix}.ip6tables.rules" 2>/dev/null || true
+    command -v nft >/dev/null 2>&1 && nft list ruleset > "${backup_prefix}.nft.rules" 2>/dev/null || true
+    command -v ufw >/dev/null 2>&1 && ufw status verbose > "${backup_prefix}.ufw.txt" 2>/dev/null || true
+    command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --list-all > "${backup_prefix}.firewalld.txt" 2>/dev/null || true
+
+    if command -v ufw >/dev/null 2>&1; then
+        ufw --force disable >/dev/null 2>&1 || true
+    fi
+
+    if systemctl list-unit-files 2>/dev/null | grep -q '^firewalld.service'; then
+        systemctl stop firewalld >/dev/null 2>&1 || true
+        systemctl disable firewalld >/dev/null 2>&1 || true
+    fi
+
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -P INPUT ACCEPT 2>/dev/null || true
+        iptables -P FORWARD ACCEPT 2>/dev/null || true
+        iptables -P OUTPUT ACCEPT 2>/dev/null || true
+        iptables -F 2>/dev/null || true
+        iptables -X 2>/dev/null || true
+        iptables -t nat -F 2>/dev/null || true
+        iptables -t mangle -F 2>/dev/null || true
+    fi
+
+    if command -v ip6tables >/dev/null 2>&1; then
+        ip6tables -P INPUT ACCEPT 2>/dev/null || true
+        ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+        ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
+        ip6tables -F 2>/dev/null || true
+        ip6tables -X 2>/dev/null || true
+        ip6tables -t mangle -F 2>/dev/null || true
+    fi
+
+    if command -v nft >/dev/null 2>&1; then
+        nft flush ruleset 2>/dev/null || true
+    fi
+
+    ok "已执行放行所有网络端口操作。"
+    echo "备份前缀：${backup_prefix}"
+}
+
+restore_firewall() {
+    local rules="${1:-}"
+    if [[ -z "${rules}" ]]; then
+        rules="$(find /root -maxdepth 1 -type f -name 'xrayr-firewall-*.iptables.rules' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-)"
+    fi
+    if [[ -z "${rules}" || ! -f "${rules}" ]]; then
+        err "未找到 iptables 备份文件。可手动指定：xrayr restore-firewall /root/xxx.iptables.rules"
+        return 1
+    fi
+    command -v iptables-restore >/dev/null 2>&1 || { err "系统没有 iptables-restore。"; return 1; }
+    iptables-restore < "${rules}"
+    ok "已恢复 iptables：${rules}"
+}
+
+uninstall_xrayr() {
+    read -r -p "确定卸载 XrayR？请输入 y 确认 [y/N]：" confirm
+    [[ "${confirm}" == "y" || "${confirm}" == "Y" ]] || { warn "已取消。"; return 0; }
+
+    systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
+    systemctl disable "${SERVICE}" >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/XrayR.service
+    rm -rf "${INSTALL_DIR}"
+    systemctl daemon-reload
+
+    read -r -p "是否同时删除 /etc/XrayR 配置和备份？[y/N]：" delconf
+    if [[ "${delconf}" == "y" || "${delconf}" == "Y" ]]; then
+        rm -rf "${CONFIG_DIR}"
+        ok "配置已删除。"
+    else
+        ok "已保留 ${CONFIG_DIR}。"
+    fi
+
+    rm -f /usr/bin/xrayr /usr/bin/XrayR
+    ok "XrayR 已卸载。"
+}
+
+show_menu() {
+    clear 2>/dev/null || true
+    echo -e "${GREEN}===========================================${PLAIN}"
+    echo -e "${GREEN}          XrayR-KOJO 管理脚本${PLAIN}"
+    echo -e "${GREEN}===========================================${PLAIN}"
+    if systemctl is-active --quiet "${SERVICE}" 2>/dev/null; then
+        echo -e "状态：${GREEN}运行中${PLAIN}"
+    elif installed; then
+        echo -e "状态：${YELLOW}已安装，未运行${PLAIN}"
+    else
+        echo -e "状态：${RED}未安装${PLAIN}"
+    fi
+    echo
+    echo "  1. 启动 XrayR"
+    echo "  2. 停止 XrayR"
+    echo "  3. 重启 XrayR"
+    echo "  4. 查看状态"
+    echo "  5. 查看实时日志"
+    echo "  6. 编辑配置"
+    echo "  7. 更新 XrayR"
+    echo "  8. 查看版本"
+    echo "  9. 设置开机自启"
+    echo " 10. 取消开机自启"
+    echo " 11. 备份配置"
+    echo " 12. 恢复最新配置备份"
+    echo " 13. 更新管理脚本"
+    echo " 14. 卸载 XrayR"
+    echo " 15. 放行 VPS 所有网络端口（高风险）"
+    echo " 16. 恢复最近 iptables 备份"
+    echo "  0. 退出"
+    echo
+    read -r -p "请选择 [0-16]：" choice
+    case "${choice}" in
+        1) start_xrayr ;;
+        2) stop_xrayr ;;
+        3) restart_xrayr ;;
+        4) status_xrayr ;;
+        5) log_xrayr ;;
+        6) edit_config ;;
+        7) update_xrayr ;;
+        8) show_version ;;
+        9) enable_xrayr ;;
+        10) disable_xrayr ;;
+        11) backup_config ;;
+        12) restore_config ;;
+        13) update_manager ;;
+        14) uninstall_xrayr ;;
+        15) open_all_ports ;;
+        16) restore_firewall ;;
+        0) exit 0 ;;
+        *) err "无效选项。" ;;
+    esac
+}
+
+usage() {
+    cat <<'EOF'
+用法：
+  xrayr                       显示菜单
+  xrayr start                 启动
+  xrayr stop                  停止
+  xrayr restart               重启
+  xrayr status                状态
+  xrayr log                   实时日志
+  xrayr config                编辑配置
+  xrayr update [版本]         更新，例如 xrayr update v0.9.4
+  xrayr version               查看版本
+  xrayr enable                设置开机自启
+  xrayr disable               取消开机自启
+  xrayr backup                备份配置
+  xrayr restore [备份文件]    恢复配置
+  xrayr update-shell          更新管理脚本
+  xrayr open-ports            放行所有网络端口（高风险）
+  xrayr restore-firewall [文件] 恢复 iptables 备份
+  xrayr uninstall             卸载
+EOF
+}
+
+need_root
+
+case "${1:-}" in
+    "") show_menu ;;
+    start) start_xrayr ;;
+    stop) stop_xrayr ;;
+    restart) restart_xrayr ;;
+    status) status_xrayr ;;
+    log|logs) log_xrayr ;;
+    config) edit_config ;;
+    update) update_xrayr "${2:-}" ;;
+    version) show_version ;;
+    enable) enable_xrayr ;;
+    disable) disable_xrayr ;;
+    backup) backup_config ;;
+    restore) restore_config "${2:-}" ;;
+    update-shell|update_shell) update_manager ;;
+    open-ports|open_ports) open_all_ports ;;
+    restore-firewall|restore_firewall) restore_firewall "${2:-}" ;;
+    uninstall) uninstall_xrayr ;;
+    help|-h|--help) usage ;;
+    *) usage; exit 1 ;;
+esac
