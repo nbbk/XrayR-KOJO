@@ -48,19 +48,19 @@ map_arch() {
     local machine
     machine="$(uname -m)"
     case "${machine}" in
-        x86_64|amd64)       ASSET_ARCH="64" ;;
+        x86_64|amd64)        ASSET_ARCH="64" ;;
         i386|i486|i586|i686) ASSET_ARCH="32" ;;
-        aarch64|arm64)      ASSET_ARCH="arm64-v8a" ;;
-        armv7l|armv7*)      ASSET_ARCH="arm32-v7a" ;;
-        armv6l|armv6*)      ASSET_ARCH="arm32-v6" ;;
-        armv5l|armv5*)      ASSET_ARCH="arm32-v5" ;;
-        mips)               ASSET_ARCH="mips32" ;;
-        mipsel)             ASSET_ARCH="mips32le" ;;
-        mips64)             ASSET_ARCH="mips64" ;;
-        mips64el)           ASSET_ARCH="mips64le" ;;
-        ppc64le)            ASSET_ARCH="ppc64le" ;;
-        riscv64)            ASSET_ARCH="riscv64" ;;
-        s390x)              ASSET_ARCH="s390x" ;;
+        aarch64|arm64)       ASSET_ARCH="arm64-v8a" ;;
+        armv7l|armv7*)       ASSET_ARCH="arm32-v7a" ;;
+        armv6l|armv6*)       ASSET_ARCH="arm32-v6" ;;
+        armv5l|armv5*)       ASSET_ARCH="arm32-v5" ;;
+        mips)                ASSET_ARCH="mips32" ;;
+        mipsel)              ASSET_ARCH="mips32le" ;;
+        mips64)              ASSET_ARCH="mips64" ;;
+        mips64el)            ASSET_ARCH="mips64le" ;;
+        ppc64le)             ASSET_ARCH="ppc64le" ;;
+        riscv64)             ASSET_ARCH="riscv64" ;;
+        s390x)               ASSET_ARCH="s390x" ;;
         *) fatal "暂不支持 CPU 架构：${machine}" ;;
     esac
     info "检测到 CPU：${machine} -> XrayR-linux-${ASSET_ARCH}.zip"
@@ -126,6 +126,30 @@ rollback() {
     fi
 }
 
+verify_checksum() {
+    local sums_file expected actual
+    sums_file="${TMP_DIR}/SHA256SUMS"
+    if ! curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS" -o "${sums_file}"; then
+        warn "Release 未提供 SHA256SUMS，跳过校验。建议使用 tools/publish-v0.9.4.ps1 发布以自动生成校验文件。"
+        return 0
+    fi
+
+    expected="$(awk -v file="${ASSET_NAME}" '$2 == file || $2 == "*" file {print $1; exit}' "${sums_file}")"
+    if [[ -z "${expected}" ]]; then
+        warn "SHA256SUMS 中没有 ${ASSET_NAME}，跳过校验。"
+        return 0
+    fi
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "${ZIP_FILE}" | awk '{print $1}')"
+    else
+        fatal "系统缺少 sha256sum，无法验证已发布的 SHA256SUMS。"
+    fi
+
+    [[ "${actual}" == "${expected}" ]] || fatal "SHA256 校验失败，拒绝安装：${ASSET_NAME}"
+    ok "SHA256 校验通过。"
+}
+
 download_release() {
     ASSET_NAME="XrayR-linux-${ASSET_ARCH}.zip"
     DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET_NAME}"
@@ -137,6 +161,8 @@ download_release() {
     info "下载 ${DOWNLOAD_URL}"
     curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 "${DOWNLOAD_URL}" -o "${ZIP_FILE}" \
         || fatal "下载失败。请确认 Release ${VERSION} 中存在 ${ASSET_NAME}。"
+
+    verify_checksum
 
     unzip -q "${ZIP_FILE}" -d "${EXTRACT_DIR}"
     [[ -f "${EXTRACT_DIR}/XrayR" ]] || fatal "Release 压缩包格式异常：根目录未找到 XrayR。"
@@ -154,7 +180,6 @@ install_program() {
     chmod +x "${INSTALL_DIR}/XrayR"
     printf '%s\n' "${VERSION}" > "${INSTALL_DIR}/.kojo-version"
 
-    # 配置文件只在不存在时初始化，更新绝不覆盖用户 config.yml。
     if [[ ! -f "${CONFIG_DIR}/config.yml" ]]; then
         if [[ -f "${INSTALL_DIR}/config.yml" ]]; then
             cp "${INSTALL_DIR}/config.yml" "${CONFIG_DIR}/config.yml"
@@ -171,7 +196,6 @@ install_program() {
         fi
     done
 
-    # Geo 数据随 Release 更新；回滚时会一起恢复配置目录。
     for f in geoip.dat geosite.dat; do
         if [[ -f "${INSTALL_DIR}/${f}" ]]; then
             cp "${INSTALL_DIR}/${f}" "${CONFIG_DIR}/${f}"
