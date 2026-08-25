@@ -156,6 +156,12 @@ open_all_ports() {
         return 0
     fi
 
+    read -r -p "最后确认：确定立即清空防火墙规则吗？请输入 y：[y/N] " second_confirm
+    if [[ "${second_confirm}" != "y" && "${second_confirm}" != "Y" ]]; then
+        warn "已取消，防火墙没有变更。"
+        return 0
+    fi
+
     local ts backup_prefix
     ts="$(date +%Y%m%d-%H%M%S)"
     backup_prefix="/root/xrayr-firewall-${ts}"
@@ -200,6 +206,9 @@ open_all_ports() {
 
     ok "已执行放行所有网络端口操作。"
     echo "备份前缀：${backup_prefix}"
+    echo "恢复 IPv4：iptables-restore < ${backup_prefix}.iptables.rules"
+    echo "恢复 IPv6：ip6tables-restore < ${backup_prefix}.ip6tables.rules"
+    echo "恢复 nftables：nft -f ${backup_prefix}.nft.rules"
 }
 
 restore_firewall() {
@@ -239,6 +248,7 @@ uninstall_xrayr() {
 }
 
 show_menu() {
+    while true; do
     clear 2>/dev/null || true
     echo -e "${GREEN}===========================================${PLAIN}"
     echo -e "${GREEN}          XrayR-KOJO 管理脚本${PLAIN}"
@@ -287,9 +297,12 @@ show_menu() {
         14) uninstall_xrayr ;;
         15) open_all_ports ;;
         16) restore_firewall ;;
-        0) exit 0 ;;
+        0) return 0 ;;
         *) err "无效选项。" ;;
     esac
+        echo
+        read -r -p "按回车键返回主菜单……" _
+    done
 }
 
 usage() {

@@ -66,7 +66,7 @@ xrayr uninstall
 仓库已经包含 Windows 发布助手：
 
 ```text
-tools/publish-v0.9.4.ps1
+tools/release.ps1 v0.9.4
 ```
 
 它默认读取：
@@ -75,7 +75,7 @@ tools/publish-v0.9.4.ps1
 C:\Users\Administrator\Desktop\XrayR v0.9.4
 ```
 
-并使用 GitHub CLI 将源码归档及 XrayR 发布包上传到 `nbbk/XrayR-KOJO` 的 `v0.9.4` Release。
+脚本会根据版本自动读取同名目录，扫描 ZIP、生成 `SHA256SUMS.txt`，并使用 GitHub CLI 创建或更新 `nbbk/XrayR-KOJO` 的 Release。
 
 ## 更新策略
 
@@ -95,10 +95,10 @@ C:\Users\Administrator\Desktop\XrayR v0.9.4
 保留 `xrayr open-ports` 功能。该操作会显著降低服务器防火墙保护级别，因此脚本会：
 
 - 显示高风险警告；
-- 要求输入明确确认词 `OPEN_ALL_PORTS`；
+- 要求输入明确确认词 `OPEN_ALL_PORTS`，再进行一次最终确认；
 - 尽量备份现有 iptables/ip6tables/nftables 规则；
 - 仅在用户主动执行时运行；
-- 提供 `xrayr restore-firewall` 尝试恢复最近的 iptables 备份。
+- 输出 iptables、ip6tables、nftables 的恢复命令，并提供 `xrayr restore-firewall` 尝试恢复最近的 IPv4 iptables 备份。
 
 ## 自动校验
 

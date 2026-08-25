@@ -128,15 +128,15 @@ rollback() {
 
 verify_checksum() {
     local sums_file expected actual
-    sums_file="${TMP_DIR}/SHA256SUMS"
-    if ! curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS" -o "${sums_file}"; then
-        warn "Release 未提供 SHA256SUMS，跳过校验。建议使用 tools/publish-v0.9.4.ps1 发布以自动生成校验文件。"
+    sums_file="${TMP_DIR}/SHA256SUMS.txt"
+    if ! curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS.txt" -o "${sums_file}"; then
+        warn "Release 未提供 SHA256SUMS.txt，跳过校验。建议使用 tools/release.ps1 发布以自动生成校验文件。"
         return 0
     fi
 
     expected="$(awk -v file="${ASSET_NAME}" '$2 == file || $2 == "*" file {print $1; exit}' "${sums_file}")"
     if [[ -z "${expected}" ]]; then
-        warn "SHA256SUMS 中没有 ${ASSET_NAME}，跳过校验。"
+        warn "SHA256SUMS.txt 中没有 ${ASSET_NAME}，跳过校验。"
         return 0
     fi
 

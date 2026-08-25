@@ -4,23 +4,15 @@
 
 ## v0.9.4 首次发布
 
-在 GitHub 仓库页面打开：
+在仓库根目录运行通用发布工具：
 
-`Releases` → `Draft a new release`
-
-Tag 填：
-
-```text
-v0.9.4
+```powershell
+.\tools\release.ps1 v0.9.4
 ```
 
-Release title 建议：
+脚本会扫描 `C:\Users\Administrator\Desktop\XrayR v0.9.4` 中的 ZIP 文件，创建或更新 GitHub Release，生成 `SHA256SUMS.txt` 并上传全部资产。该 PowerShell 文件使用 UTF-8 BOM 保存，可以在 Windows PowerShell 5.1 中正常显示中文。
 
-```text
-XrayR-KOJO v0.9.4
-```
-
-建议同时上传源码归档，便于长期备份并满足开源许可证的源码可获得性要求：
+建议在发布目录中同时保留源码归档，便于长期备份并满足开源许可证的源码可获得性要求：
 
 ```text
 XrayR-0.9.4.tar.gz
@@ -59,7 +51,7 @@ XrayR-linux-s390x.zip
 C:\Users\Administrator\Desktop\XrayR v0.9.4
 ```
 
-该目录中的 Windows、macOS、FreeBSD 等包也可以一起上传保存，但 Linux 一键安装脚本只会自动选择 `XrayR-linux-*.zip`。
+该目录中的 Windows、macOS、FreeBSD 等 ZIP 包也会一并上传保存，但 Linux 一键安装脚本只会自动选择 `XrayR-linux-*.zip`。
 
 ## 发布后验证
 
@@ -99,6 +91,12 @@ v0.9.5
 └── XrayR-linux-64.zip
 └── XrayR-linux-arm64-v8a.zip
 ...
+```
+
+将文件放入 `C:\Users\Administrator\Desktop\XrayR v0.9.5`，然后执行：
+
+```powershell
+.\tools\release.ps1 v0.9.5
 ```
 
 服务器执行：
