@@ -31,6 +31,16 @@ installed() {
     [[ -x "${INSTALL_DIR}/XrayR" && -f /etc/systemd/system/XrayR.service ]]
 }
 
+install_xrayr() {
+    if installed; then
+        warn "XrayR 已安装。如需更新，请选择“更新 XrayR”或执行：xrayr update"
+        return 0
+    fi
+
+    info "正在启动 XrayR 一键安装程序……"
+    bash <(curl -fsSL "${RAW_INSTALL}")
+}
+
 start_xrayr() {
     systemctl start "${SERVICE}"
     sleep 1
@@ -243,8 +253,8 @@ uninstall_xrayr() {
         ok "已保留 ${CONFIG_DIR}。"
     fi
 
-    rm -f /usr/bin/xrayr /usr/bin/XrayR
     ok "XrayR 已卸载。"
+    info "已保留 xrayr 管理脚本，可重新运行 xrayr 并选择“安装 XrayR”。"
 }
 
 show_menu() {
@@ -253,14 +263,6 @@ show_menu() {
     echo -e "${GREEN}===========================================${PLAIN}"
     echo -e "${GREEN}          XrayR-KOJO 管理脚本${PLAIN}"
     echo -e "${GREEN}===========================================${PLAIN}"
-    if systemctl is-active --quiet "${SERVICE}" 2>/dev/null; then
-        echo -e "状态：${GREEN}运行中${PLAIN}"
-    elif installed; then
-        echo -e "状态：${YELLOW}已安装，未运行${PLAIN}"
-    else
-        echo -e "状态：${RED}未安装${PLAIN}"
-    fi
-    echo
     echo "  1. 启动 XrayR"
     echo "  2. 停止 XrayR"
     echo "  3. 重启 XrayR"
@@ -277,9 +279,18 @@ show_menu() {
     echo " 14. 卸载 XrayR"
     echo " 15. 放行 VPS 所有网络端口（高风险）"
     echo " 16. 恢复最近 iptables 备份"
+    echo " 17. 安装 XrayR"
     echo "  0. 退出"
     echo
-    read -r -p "请选择 [0-16]：" choice
+    if systemctl is-active --quiet "${SERVICE}" 2>/dev/null; then
+        echo -e "当前状态：${GREEN}运行中${PLAIN}"
+    elif installed; then
+        echo -e "当前状态：${YELLOW}已安装，未运行${PLAIN}"
+    else
+        echo -e "当前状态：${RED}未安装${PLAIN}"
+    fi
+    echo
+    read -r -p "请选择 [0-17]：" choice
     case "${choice}" in
         1) start_xrayr ;;
         2) stop_xrayr ;;
@@ -297,6 +308,7 @@ show_menu() {
         14) uninstall_xrayr ;;
         15) open_all_ports ;;
         16) restore_firewall ;;
+        17) install_xrayr ;;
         0) return 0 ;;
         *) err "无效选项。" ;;
     esac
@@ -309,6 +321,7 @@ usage() {
     cat <<'EOF'
 用法：
   xrayr                       显示菜单
+  xrayr install               安装
   xrayr start                 启动
   xrayr stop                  停止
   xrayr restart               重启
@@ -332,6 +345,7 @@ need_root
 
 case "${1:-}" in
     "") show_menu ;;
+    install) install_xrayr ;;
     start) start_xrayr ;;
     stop) stop_xrayr ;;
     restart) restart_xrayr ;;

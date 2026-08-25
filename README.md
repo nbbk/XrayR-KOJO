@@ -18,9 +18,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/nbbk/XrayR-KOJO/main/install.s
 xrayr
 ```
 
+管理菜单使用数字选择功能，运行状态显示在菜单底部。卸载程序后会保留管理脚本，可以再次运行 `xrayr` 并选择“安装 XrayR”。
+
 或直接：
 
 ```bash
+xrayr install
 xrayr start
 xrayr stop
 xrayr restart
