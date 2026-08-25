@@ -38,6 +38,16 @@ if (-not $assets -or $assets.Count -eq 0) {
 Write-Host "将发布以下文件：" -ForegroundColor Cyan
 $assets | ForEach-Object { Write-Host "  - $($_.Name)" }
 
+# 为所有发布资产生成 SHA256SUMS，Linux 安装器会自动校验对应 ZIP。
+$checksumFile = Join-Path $env:TEMP "XrayR-KOJO-SHA256SUMS"
+$checksumLines = foreach ($asset in $assets) {
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset.FullName).Hash.ToLowerInvariant()
+    "$hash  $($asset.Name)"
+}
+$checksumLines | Set-Content -LiteralPath $checksumFile -Encoding Ascii
+
+Write-Host "已生成 SHA256SUMS。" -ForegroundColor Green
+
 Write-Host "检查 Release $Tag ..." -ForegroundColor Cyan
 & gh release view $Tag --repo $Repo *> $null
 $releaseExists = ($LASTEXITCODE -eq 0)
@@ -62,9 +72,17 @@ foreach ($asset in $assets) {
     }
 }
 
-Write-Host "" 
+Write-Host "上传：SHA256SUMS" -ForegroundColor Cyan
+& gh release upload $Tag "$checksumFile#SHA256SUMS" --repo $Repo --clobber
+if ($LASTEXITCODE -ne 0) {
+    Fail "上传 SHA256SUMS 失败。"
+}
+
+Remove-Item -LiteralPath $checksumFile -Force -ErrorAction SilentlyContinue
+
+Write-Host ""
 Write-Host "Release 发布完成。" -ForegroundColor Green
 Write-Host "仓库：https://github.com/$Repo/releases/tag/$Tag"
-Write-Host "" 
+Write-Host ""
 Write-Host "接下来可在 Linux VPS 测试：" -ForegroundColor Green
 Write-Host "bash <(curl -Ls https://raw.githubusercontent.com/nbbk/XrayR-KOJO/main/install.sh)"
