@@ -129,7 +129,7 @@ rollback() {
 verify_checksum() {
     local sums_file expected actual
     sums_file="${TMP_DIR}/SHA256SUMS.txt"
-    if ! curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS.txt" -o "${sums_file}"; then
+    if ! curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS.txt" -o "${sums_file}" 2>/dev/null; then
         warn "Release 未提供 SHA256SUMS.txt，跳过校验。建议使用 tools/release.ps1 发布以自动生成校验文件。"
         return 0
     fi
