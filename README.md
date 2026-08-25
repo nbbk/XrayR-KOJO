@@ -10,6 +10,8 @@
 bash <(curl -Ls https://raw.githubusercontent.com/nbbk/XrayR-KOJO/main/install.sh)
 ```
 
+> 首次使用前，必须先在本仓库 Releases 发布至少一个版本，例如 `v0.9.4`，并上传对应的 `XrayR-linux-*.zip`。详见 `docs/RELEASE.md`。
+
 安装完成后使用：
 
 ```bash
@@ -59,9 +61,21 @@ xrayr uninstall
 - `riscv64` → `XrayR-linux-riscv64.zip`
 - `s390x` → `XrayR-linux-s390x.zip`
 
-## Release 约定
+## v0.9.4 Release 快速发布
 
-请在本仓库 Releases 中创建例如 `v0.9.4`，并上传对应平台 ZIP。安装器只依赖 `nbbk/XrayR-KOJO` 自己的 Release，不再依赖已弃用的上游仓库。
+仓库已经包含 Windows 发布助手：
+
+```text
+tools/publish-v0.9.4.ps1
+```
+
+它默认读取：
+
+```text
+C:\Users\Administrator\Desktop\XrayR v0.9.4
+```
+
+并使用 GitHub CLI 将源码归档及 XrayR 发布包上传到 `nbbk/XrayR-KOJO` 的 `v0.9.4` Release。
 
 ## 更新策略
 
@@ -81,10 +95,15 @@ xrayr uninstall
 保留 `xrayr open-ports` 功能。该操作会显著降低服务器防火墙保护级别，因此脚本会：
 
 - 显示高风险警告；
-- 要求输入明确确认词；
-- 尽量备份现有 iptables 规则；
-- 仅在用户主动执行时运行。
+- 要求输入明确确认词 `OPEN_ALL_PORTS`；
+- 尽量备份现有 iptables/ip6tables/nftables 规则；
+- 仅在用户主动执行时运行；
+- 提供 `xrayr restore-firewall` 尝试恢复最近的 iptables 备份。
+
+## 自动校验
+
+`.github/workflows/validate.yml` 会检查 `install.sh` 与 `scripts/xrayr` 的 Bash 语法，并确认核心安装路径与仓库依赖没有重新指向旧上游。
 
 ## 许可证
 
-XrayR 本体版权和许可证归原项目及其贡献者所有。本仓库新增的安装与管理脚本在不违反上游许可证的前提下提供维护便利。
+XrayR 本体版权和许可证归原项目及其贡献者所有。本仓库保留 MPL-2.0 许可证，并提供对应源码归档的 Release 发布方式。
